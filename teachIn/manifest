@@ -1,0 +1,11 @@
+[app]
+name = TeachIn
+category = Tools
+author = Peter Habermehl
+icon = icon.png
+desc = Steuerung für Trainingsroboter mit 3 Steppern und Servo-Greifer
+version = 0.0.1
+exec = teachIn.py
+uuid = 767bdcf6-7b87-4c01-900f-7fef80c7451c
+managed = yes
+firmware = 0.9.4
