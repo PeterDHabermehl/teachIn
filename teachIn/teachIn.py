@@ -1,12 +1,12 @@
 #! /usr/bin/env python3
 # -*- coding: utf-8 -*-
 """fischertechnik App - Copyright (c) 2019 -- Peter Habermehl
- print('{:3d}:{:6d} {:6d}{:6d}{:6d}'.format(1,0,2480,1233,66).split())
 """
 
 import sys, time
 import ftduino_direct as ftd
 from TouchStyle import *
+from TouchAuxiliary import *
 from PyQt4 import QtCore, QtGui
 
 DEVEL = True
@@ -25,7 +25,7 @@ class FtcGuiApplication(TouchApplication):
         self.a4pos = 10 # Axis 4: Servo gripper
         
         
-        win = TouchWindow("TeachIn")
+        self.win = TouchWindow("TeachIn")
         
         # Some tabs
         self.tabs = QTabWidget()
@@ -132,16 +132,24 @@ class FtcGuiApplication(TouchApplication):
         vbox.addWidget(self.posList)
         
         hbox = QHBoxLayout()
-        self.itmUp = QPushButton("  /\  ")
+        self.itmUp = QPushButton(" /\ ")
+        self.itmUp.clicked.connect(self.itmUpClicked)
         hbox.addWidget(self.itmUp)
 
-        self.itmDn = QPushButton("  \/  ")
+        self.itmDn = QPushButton(" \/ ")
+        self.itmDn.clicked.connect(self.itmDnClicked)
         hbox.addWidget(self.itmDn)
         
-        self.itmCp = QPushButton("  Cp  ")
+        self.itmIn = QPushButton(" Ins ")
+        self.itmIn.clicked.connect(self.itmInClicked)
+        hbox.addWidget(self.itmIn)
+        
+        self.itmCp = QPushButton(" Cp ")
+        self.itmCp.clicked.connect(self.itmCpClicked)
         hbox.addWidget(self.itmCp)
         
-        self.itmRm = QPushButton("  Del  ")
+        self.itmRm = QPushButton(" Del ")
+        self.itmRm.setStyleSheet("QPushButton { background-color: darkred}")
         self.itmRm.clicked.connect(self.itmRmClicked)
         hbox.addWidget(self.itmRm)
         
@@ -157,9 +165,30 @@ class FtcGuiApplication(TouchApplication):
         
         vbox = QVBoxLayout()
         
+        vbox.addStretch()
+        
         self.walkThrough = QPushButton(" Run ")
+        self.walkThrough.setStyleSheet("QPushButton { background-color: green}")
         self.walkThrough.clicked.connect(self.walkThroughClicked)
         vbox.addWidget(self.walkThrough)
+        
+        vbox.addStretch()
+        
+        self.loadList = QPushButton("Load list")
+        self.loadList.clicked.connect(self.loadListClicked)
+        vbox.addWidget(self.loadList)
+        
+        self.saveList = QPushButton("Save list")
+        self.saveList.clicked.connect(self.saveListClicked)
+        vbox.addWidget(self.saveList)
+        
+        vbox.addStretch()
+        
+        self.clearList = QPushButton("Clear list")
+        self.clearList.setStyleSheet("QPushButton { background-color: darkred}")
+        self.clearList.clicked.connect(self.clearListClicked)
+        vbox.addWidget(self.clearList)
+        
         #
         tab03.setLayout(vbox)
         self.tabs.addTab(tab03,"Oper")
@@ -168,7 +197,7 @@ class FtcGuiApplication(TouchApplication):
         #
         #
         #
-        win.setCentralWidget(self.tabs)
+        self.win.setCentralWidget(self.tabs)
         
         #
         # 
@@ -184,7 +213,7 @@ class FtcGuiApplication(TouchApplication):
         #
         #
         #
-        win.show()
+        self.win.show()
         self.exec_()
 
     def axesClick(self):
@@ -261,24 +290,95 @@ class FtcGuiApplication(TouchApplication):
     def addToList(self):
         self.posList.addItem('{:3d}:{:5d}{:5d}{:5d}{:3d}'.format(self.posList.count()+1,self.a1pos,self.a2pos,self.a3pos,self.a4pos))
     
-    def itmRmClicked(self):
+    def itmUpClicked(self):
+        row=self.posList.currentRow()
+        if row>0:
+            i=self.posList.takeItem(row)
+            self.posList.insertItem(row-1,i)
+            self.posList.setCurrentRow(row-1)
+    
+    def itmDnClicked(self):
+        row=self.posList.currentRow()
+        if row<self.posList.count()-1:
+            i=self.posList.takeItem(row)
+            self.posList.insertItem(row+1,i)
+            self.posList.setCurrentRow(row+1)
+    
+    def itmInClicked(self):
+        fta=TouchAuxMultibutton("Command", self.win)
+        fta.setButtons([ "Wait",
+                         "User wait",
+                         "Input wait"])
+                      
+        fta.setTextSize(3)
+        fta.setBtnTextSize(3)
+        (s,r)=fta.exec_() 
         
+        if r == "Wait":
+            t = TouchAuxKeyboard("Time [msec]","1000", self.win).exec_()  
+            try:
+                r = abs(int(t))
+            except:
+                r = 0
+            if r != 0:
+                self.posList.addItem("Cmd: Wait " + str(r) + " msec")
+        elif r == "User wait":
+            t = TouchAuxKeyboard("Message", "Press button to continue.", self.win).exec_()
+            self.posList.addItem("Cmd: User_wait " + t)
+                
+    def itmCpClicked(self):
+        if self.posList.count()>0:
+            row=self.posList.currentRow()
+            self.posList.insertItem(row+1,self.posList.item(row).text())
+            self.posList.setCurrentRow(row+1)
+    
+    def itmRmClicked(self):
+        return self.posList.takeItem(self.posList.currentRow())
     
     def walkThroughClicked(self):
         oldMcGrab = -1
         
+        self.tabs.setCurrentIndex(1)
+        self.processEvents()
+        
+
         for i in range(0, self.posList.count()):
+            self.posList.setCurrentRow(i)
+            self.processEvents()
+            
             d = self.posList.item(i).text().split()
             
-            self.posList.setCurrentRow(i)
-            
-            self.myftd.comm("rob_run " + d[1] + " " + d[3] + " " + d[2])
-            
-            if int(d[4]) != oldMcGrab :
-                oldMcGrab = int(d[4])
-                self.myftd.comm("rob_grab " + d[4])
-                time.sleep(0.5)
+            if d[0] != "Cmd:":
+                self.myftd.comm("rob_run " + d[1] + " " + d[3] + " " + d[2])
                 
+                if int(d[4]) != oldMcGrab :
+                    oldMcGrab = int(d[4])
+                    self.myftd.comm("rob_grab " + d[4])
+                    time.sleep(0.5)
+            elif d[1] == "Wait":
+                time.sleep(float(d[2])/1000)
+            elif d[1] == "User_wait":
+                t=TouchMessageBox("User wait", self.win)
+                t.setText(self.posList.item(i).text()[14:])
+                t.setBtnTextSize(3)
+                t.setPosButton("Continue")
+                (r,s)=t.exec_()
+    def loadListClicked(self):
+        pass
+    
+    def saveListClicked(self):
+        pass
+    
+    def clearListClicked(self):
+        t=TouchMessageBox("Clear", self.win)
+        t.setCancelButton()
+        t.setText("Do you really\nwant to delete\nthe program list?")
+        t.setBtnTextSize(2)
+        t.setPosButton("Yes")
+        t.setNegButton("No")
+        (r,s)=t.exec_()
+        
+        if s == "Yes": self.posList.clear()
                 
 if __name__ == "__main__":
     FtcGuiApplication(sys.argv)
