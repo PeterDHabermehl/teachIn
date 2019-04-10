@@ -400,6 +400,8 @@ class FtcGuiApplication(TouchApplication):
         oldMcGrab = -1
         
         self.tabs.setCurrentIndex(1)
+        self.posList.setCurrentRow(0)
+
         for c in self.win.findChildren(QWidget,''):
             c.setEnabled(False)
             
