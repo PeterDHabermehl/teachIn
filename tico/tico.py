@@ -3,7 +3,7 @@
 """fischertechnik App - Copyright (c) 2019 -- Peter Habermehl
 """
 
-import sys, time
+import sys, time, json
 import ftduino_direct as ftd
 from TouchStyle import *
 from TouchAuxiliary import *
@@ -11,6 +11,32 @@ from PyQt4 import QtCore, QtGui
 
 DEVEL = True
 FTD_VER = "1.3.3_enhanced"
+
+HOSTDIR = os.path.dirname(os.path.realpath(__file__))
+PROGDIR= os.path.join(HOSTDIR , "proglists")
+
+if not os.path.exists(PROGDIR):
+    os.mkdir(PROGDIR)
+    
+
+class QDblPushButton(QPushButton):
+    doubleClicked = pyqtSignal()
+    clicked = pyqtSignal()
+
+    def __init__(self, *args, **kwargs):
+        QPushButton.__init__(self, *args, **kwargs)
+        self.timer = QTimer()
+        self.timer.setSingleShot(True)
+        self.timer.timeout.connect(self.clicked.emit)
+        super().clicked.connect(self.checkDoubleClick)
+
+    @pyqtSlot()
+    def checkDoubleClick(self):
+        if self.timer.isActive():
+            self.doubleClicked.emit()
+            self.timer.stop()
+        else:
+            self.timer.start(250)
 
 class FtcGuiApplication(TouchApplication):
     """Steuerung für Trainingsroboter mit 3 Steppern und Servo-Greifer
@@ -25,7 +51,12 @@ class FtcGuiApplication(TouchApplication):
         self.a4pos = 10 # Axis 4: Servo gripper
         
         
-        self.win = TouchWindow("TeachIn")
+        self.win = TouchWindow("TiCo")
+        
+        if self.win.width()>240:
+            BIGDISPLAY = True
+        else:
+            BIGDISPLAY = False
         
         # Some tabs
         self.tabs = QTabWidget()
@@ -65,12 +96,16 @@ class FtcGuiApplication(TouchApplication):
         
         vbox.addLayout(hbox)
         
-        self.dial = QDial()
-        self.dial.setNotchesVisible(True)
+        if BIGDISPLAY:
+            self.dial = QDial()
+            self.dial.setNotchesVisible(True)
+            self.dial.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        else:
+            self.dial = QSlider(Qt.Horizontal)
+            
         self.dial.setMinimum(0)
         self.dial.setMaximum(3500)
         self.dial.setValue(0)
-        self.dial.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.dial.sliderReleased.connect(self.dialed)
         self.dial.valueChanged.connect(self.dialing)
         
@@ -105,7 +140,11 @@ class FtcGuiApplication(TouchApplication):
         self.home = QPushButton(">|<")
         self.home.clicked.connect(self.rob_home)
         hbox.addWidget(self.home)
-        self.allOff = QPushButton("ALL OFF")
+        if BIGDISPLAY:
+            self.allOff = QPushButton("ALL OFF")
+        else:
+            self.allOff = QPushButton("OFF")
+            
         self.allOff.setStyleSheet("QPushButton { background-color: red}")
         self.allOff.clicked.connect(self.all_off)
         hbox.addWidget(self.allOff)
@@ -128,7 +167,10 @@ class FtcGuiApplication(TouchApplication):
         vbox = QVBoxLayout()
         #
         self.posList = QListWidget()
-        self.posList.setStyleSheet("font: 16pt Courier")
+        if BIGDISPLAY:
+            self.posList.setStyleSheet("font: 16pt Courier")
+        else:
+            self.posList.setStyleSheet("font: 12pt Courier")
         vbox.addWidget(self.posList)
         
         hbox = QHBoxLayout()
@@ -140,7 +182,10 @@ class FtcGuiApplication(TouchApplication):
         self.itmDn.clicked.connect(self.itmDnClicked)
         hbox.addWidget(self.itmDn)
         
-        self.itmIn = QPushButton(" Ins ")
+        if BIGDISPLAY:
+            self.itmIn = QPushButton(" Ins ")
+        else:
+            self.itmIn = QPushButton(" + ")
         self.itmIn.clicked.connect(self.itmInClicked)
         hbox.addWidget(self.itmIn)
         
@@ -148,9 +193,12 @@ class FtcGuiApplication(TouchApplication):
         self.itmCp.clicked.connect(self.itmCpClicked)
         hbox.addWidget(self.itmCp)
         
-        self.itmRm = QPushButton(" Del ")
+        if BIGDISPLAY:
+            self.itmRm = QDblPushButton(" Del ")
+        else:
+            self.itmRm = QDblPushButton("  -  ")
         self.itmRm.setStyleSheet("QPushButton { background-color: darkred}")
-        self.itmRm.clicked.connect(self.itmRmClicked)
+        self.itmRm.doubleClicked.connect(self.itmRmClicked)
         hbox.addWidget(self.itmRm)
         
         vbox.addLayout(hbox)
@@ -182,11 +230,16 @@ class FtcGuiApplication(TouchApplication):
         self.saveList.clicked.connect(self.saveListClicked)
         vbox.addWidget(self.saveList)
         
+        self.deleteList = QPushButton("Delete list")
+        self.deleteList.setStyleSheet("QPushButton { background-color: darkblue}")
+        self.deleteList.clicked.connect(self.deleteListClicked)
+        vbox.addWidget(self.deleteList)
+        
         vbox.addStretch()
         
-        self.clearList = QPushButton("Clear list")
+        self.clearList = QDblPushButton("Clear list")
         self.clearList.setStyleSheet("QPushButton { background-color: darkred}")
-        self.clearList.clicked.connect(self.clearListClicked)
+        self.clearList.doubleClicked.connect(self.clearListClicked)
         vbox.addWidget(self.clearList)
         
         #
@@ -325,7 +378,15 @@ class FtcGuiApplication(TouchApplication):
         elif r == "User wait":
             t = TouchAuxKeyboard("Message", "Press button to continue.", self.win).exec_()
             self.posList.addItem("Cmd: User_wait " + t)
-                
+        elif r == "Input wait":
+            s,r=TouchAuxRequestInteger(
+            "Input No.","Please select input to wait for:",
+            4,
+            4,
+            8,"Okay",self.win).exec_()  
+            if s:
+                self.posList.addItem("Cmd: Input_wait " + str(r))
+    
     def itmCpClicked(self):
         if self.posList.count()>0:
             row=self.posList.currentRow()
@@ -363,14 +424,76 @@ class FtcGuiApplication(TouchApplication):
                 t.setBtnTextSize(3)
                 t.setPosButton("Continue")
                 (r,s)=t.exec_()
+            elif d[1] == "Input_wait":
+                try:
+                    while int(self.myftd.comm("input_get i"+d[2])) == 0:
+                        time.sleep(0.005)
+                except:
+                    print("reading input failed")
+                    
+                
     def loadListClicked(self):
-        pass
-    
+        files = os.listdir(PROGDIR)        
+        files.sort()
+        
+        if len(files) > 0:
+            (s,r) = TouchAuxListRequester("Load","Program list",files,files[0],"Okay", self.win).exec_()
+        
+        if s:
+            self.posList.clear()
+            with open(os.path.join(PROGDIR, r), "r", encoding = "utf-8") as file:
+                line = file.readline()
+                while line:
+                    self.posList.addItem(line[:-1])
+                    line = file.readline()
+            file.close()
+
     def saveListClicked(self):
-        pass
-    
+        if self.posList.count()>0:
+            filename = clean(TouchAuxKeyboard("Save","myProg",self.win).exec_(), 32)
+            
+            filename = os.path.join(PROGDIR, filename)
+            
+            s = "Yes"
+            if os.path.exists(filename):
+                t=TouchMessageBox("Warning", self.win)
+                t.setCancelButton()
+                t.setText("This file already\nexists!\nDo you want to\noverwrite it?")
+                t.setBtnTextSize(2)
+                t.setPosButton("Yes")
+                t.setNegButton("No")
+                (r,s)=t.exec_()
+            
+            if s == "Yes":
+                with open(filename, "w", encoding = "utf-8") as file:
+                    for i in range(0, self.posList.count()):
+                        file.write(self.posList.item(i).text() + "\n")
+                file.close()
+        
+    def deleteListClicked(self):
+        files = os.listdir(PROGDIR)        
+        files.sort()
+        
+        if len(files) > 0:
+            (s,r) = TouchAuxListRequester("Delete","Program list",files,files[0],"Okay", self.win).exec_()
+        
+            if s:
+                filename = os.path.join(PROGDIR, r)
+                s = "Yes"
+                if os.path.exists(filename):
+                    t=TouchMessageBox("Warning", self.win)
+                    t.setCancelButton()
+                    t.setText("Do you really\nwant to permanently\ndelete this file?\n\n" + r)
+                    t.setBtnTextSize(2)
+                    t.setPosButton("Yes")
+                    t.setNegButton("No")
+                    (r,s)=t.exec_()
+            
+                if s == "Yes":
+                    os.remove(filename)
+            
     def clearListClicked(self):
-        t=TouchMessageBox("Clear", self.win)
+        """t=TouchMessageBox("Clear", self.win)
         t.setCancelButton()
         t.setText("Do you really\nwant to delete\nthe program list?")
         t.setBtnTextSize(2)
@@ -379,6 +502,15 @@ class FtcGuiApplication(TouchApplication):
         (r,s)=t.exec_()
         
         if s == "Yes": self.posList.clear()
-                
+        """
+        self.posList.clear()
+        
+def clean(text,maxlen):
+    res=""
+    valid="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890_-."
+    for ch in text:
+        if ch in valid: res=res+ch
+    return res[:maxlen]
+        
 if __name__ == "__main__":
     FtcGuiApplication(sys.argv)
