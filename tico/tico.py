@@ -400,8 +400,11 @@ class FtcGuiApplication(TouchApplication):
         oldMcGrab = -1
         
         self.tabs.setCurrentIndex(1)
+        for c in self.win.findChildren(QWidget,''):
+            c.setEnabled(False)
+            
         self.processEvents()
-        
+
 
         for i in range(0, self.posList.count()):
             self.posList.setCurrentRow(i)
@@ -431,6 +434,8 @@ class FtcGuiApplication(TouchApplication):
                 except:
                     print("reading input failed")
                     
+        for c in self.win.findChildren(QWidget,''):
+            c.setEnabled(True)           
                 
     def loadListClicked(self):
         files = os.listdir(PROGDIR)        
@@ -439,14 +444,14 @@ class FtcGuiApplication(TouchApplication):
         if len(files) > 0:
             (s,r) = TouchAuxListRequester("Load","Program list",files,files[0],"Okay", self.win).exec_()
         
-        if s:
-            self.posList.clear()
-            with open(os.path.join(PROGDIR, r), "r", encoding = "utf-8") as file:
-                line = file.readline()
-                while line:
-                    self.posList.addItem(line[:-1])
+            if s:
+                self.posList.clear()
+                with open(os.path.join(PROGDIR, r), "r", encoding = "utf-8") as file:
                     line = file.readline()
-            file.close()
+                    while line:
+                        self.posList.addItem(line[:-1])
+                        line = file.readline()
+                file.close()
 
     def saveListClicked(self):
         if self.posList.count()>0:
