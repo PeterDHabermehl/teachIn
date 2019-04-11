@@ -5,6 +5,7 @@
 
 import sys, time, json
 import ftduino_direct as ftd
+import numpy as np
 from TouchStyle import *
 from TouchAuxiliary import *
 from PyQt4 import QtCore, QtGui
@@ -18,6 +19,14 @@ PROGDIR= os.path.join(HOSTDIR , "proglists")
 if not os.path.exists(PROGDIR):
     os.mkdir(PROGDIR)
     
+
+UAPOS = [    0,  700, 1350, 1700, 2000, 2300, 2700, 3100, 3500]
+LUPOS = [ 3050, 3500, 3500, 3500, 3500, 3500, 3500, 3500, 3500]
+LLPOS = [    0,    0,    0,  600,  900, 1100, 1300, 1500, 1600]
+
+LAPOS = [    0,  400,  800, 1500, 1700, 3500]
+UUPOS = [ 1100, 1450, 1750, 2850, 3500, 3500]
+ULPOS = [    0,    0,    0,    0,    0,  700]
 
 class QDblPushButton(QPushButton):
     doubleClicked = pyqtSignal()
@@ -171,6 +180,7 @@ class FtcGuiApplication(TouchApplication):
             self.posList.setStyleSheet("font: 16pt Courier")
         else:
             self.posList.setStyleSheet("font: 12pt Courier")
+        self.posList.itemDoubleClicked.connect(self.itmDblClicked)
         vbox.addWidget(self.posList)
         
         hbox = QHBoxLayout()
@@ -261,7 +271,8 @@ class FtcGuiApplication(TouchApplication):
         if ((self.myftd.getDevice() == None) or (self.myftd.comm("ftduino_direct_get_version") != FTD_VER)) and not DEVEL:
             self.ftDuino_not_found()
             return
-
+        
+        self.myftd.ftduino.timeout=None
         
         #
         #
@@ -271,7 +282,8 @@ class FtcGuiApplication(TouchApplication):
 
     def axesClick(self):
         sender = self.sender()
-        if sender != self.home:
+
+        if sender == self.a1 or sender == self.a2 or sender == self.a3 or sender == self.a4:
             self.a1.setChecked(False)
             self.a2.setChecked(False)
             self.a3.setChecked(False)
@@ -282,10 +294,10 @@ class FtcGuiApplication(TouchApplication):
             self.dial.setRange(0, 6500)
             self.dial.setValue(self.a1pos)
         elif self.a2.isChecked():
-            self.dial.setRange(0, 3500)
+            self.dial.setRange(int(np.interp(self.a3pos, LAPOS, ULPOS)), int(np.interp(self.a3pos, LAPOS, UUPOS)))
             self.dial.setValue(self.a2pos)
         elif self.a3.isChecked(): 
-            self.dial.setRange(0, 3500)
+            self.dial.setRange(int(np.interp(self.a2pos, UAPOS, LLPOS)), int(np.interp(self.a2pos, UAPOS, LUPOS)))
             self.dial.setValue(self.a3pos)
         elif self.a4.isChecked():
             self.dial.setRange(0, 100)
@@ -311,9 +323,11 @@ class FtcGuiApplication(TouchApplication):
         self.axesClick()
         
     def all_off(self):
-        self.myftd.comm("rob_off")
         self.myftd.comm("rob_grab 10")
-    
+        self.a4pos = 10
+        self.axesClick()
+        self.myftd.comm("rob_off")
+        
     def lesserClicked(self):
         self.dial.setValue(self.dial.value()-1)
         self.dialed()
@@ -343,6 +357,14 @@ class FtcGuiApplication(TouchApplication):
     def addToList(self):
         self.posList.addItem('{:3d}:{:5d}{:5d}{:5d}{:3d}'.format(self.posList.count()+1,self.a1pos,self.a2pos,self.a3pos,self.a4pos))
     
+    def itmDblClicked(self):
+        self.oldMcGrab = -1
+
+        d = self.posList.item(self.posList.currentRow()).text().split()
+        self.execStep(d, self.posList.currentRow())
+        
+        self.axesClick()
+        
     def itmUpClicked(self):
         row=self.posList.currentRow()
         if row>0:
@@ -361,7 +383,9 @@ class FtcGuiApplication(TouchApplication):
         fta=TouchAuxMultibutton("Command", self.win)
         fta.setButtons([ "Wait",
                          "User wait",
-                         "Input wait"])
+                         "Input wait",
+                         "Home",
+                         "All off"])
                       
         fta.setTextSize(3)
         fta.setBtnTextSize(3)
@@ -386,6 +410,10 @@ class FtcGuiApplication(TouchApplication):
             8,"Okay",self.win).exec_()  
             if s:
                 self.posList.addItem("Cmd: Input_wait " + str(r))
+        elif r == "Home":
+            self.posList.addItem("Cmd: Home")
+        elif r == "All off":
+            self.posList.addItem("Cmd: All_off")
     
     def itmCpClicked(self):
         if self.posList.count()>0:
@@ -397,48 +425,64 @@ class FtcGuiApplication(TouchApplication):
         return self.posList.takeItem(self.posList.currentRow())
     
     def walkThroughClicked(self):
-        oldMcGrab = -1
-        
+        self.oldMcGrab = -1
+                
         self.tabs.setCurrentIndex(1)
         self.posList.setCurrentRow(0)
 
-        for c in self.win.findChildren(QWidget,''):
-            c.setEnabled(False)
+        for ch in self.win.findChildren(QWidget,''):
+            ch.setEnabled(False)
             
         self.processEvents()
 
-
         for i in range(0, self.posList.count()):
+            self.processEvents()
             self.posList.setCurrentRow(i)
             self.processEvents()
             
             d = self.posList.item(i).text().split()
+            self.processEvents()
             
-            if d[0] != "Cmd:":
-                self.myftd.comm("rob_run " + d[1] + " " + d[3] + " " + d[2])
-                
-                if int(d[4]) != oldMcGrab :
-                    oldMcGrab = int(d[4])
-                    self.myftd.comm("rob_grab " + d[4])
-                    time.sleep(0.5)
-            elif d[1] == "Wait":
-                time.sleep(float(d[2])/1000)
-            elif d[1] == "User_wait":
-                t=TouchMessageBox("User wait", self.win)
-                t.setText(self.posList.item(i).text()[14:])
-                t.setBtnTextSize(3)
-                t.setPosButton("Continue")
-                (r,s)=t.exec_()
-            elif d[1] == "Input_wait":
-                try:
-                    while int(self.myftd.comm("input_get i"+d[2])) == 0:
-                        time.sleep(0.005)
-                except:
-                    print("reading input failed")
+            self.execStep(d, i)            
                     
-        for c in self.win.findChildren(QWidget,''):
-            c.setEnabled(True)           
-                
+        for ch in self.win.findChildren(QWidget,''):
+            ch.setEnabled(True)           
+
+        self.axesClick()
+        self.myftd.comm("rob_off")
+        
+        
+    def execStep(self, d, i):
+        if d[0] != "Cmd:":
+            self.myftd.comm("rob_run " + d[1] + " " + d[3] + " " + d[2])
+            
+            if int(d[4]) != self.oldMcGrab :
+                self.oldMcGrab = int(d[4])
+                self.myftd.comm("rob_grab " + d[4])
+                time.sleep(0.5)
+            self.a1pos = int(d[1])
+            self.a2pos = int(d[2])
+            self.a3pos = int(d[3])
+            self.a4pos = int(d[4])
+        elif d[1] == "Home":
+            self.rob_home()
+        elif d[1] == "All_off":
+            self.all_off()
+        elif d[1] == "Wait":
+            time.sleep(float(d[2])/1000)
+        elif d[1] == "User_wait":
+            t=TouchMessageBox("User wait", self.win)
+            t.setText(self.posList.item(i).text()[14:])
+            t.setBtnTextSize(3)
+            t.setPosButton("Continue")
+            (r,s)=t.exec_()
+        elif d[1] == "Input_wait":
+            try:
+                while int(self.myftd.comm("input_get i"+d[2])) == 0:
+                    time.sleep(0.005)
+            except:
+                print("reading input failed")
+    
     def loadListClicked(self):
         files = os.listdir(PROGDIR)        
         files.sort()
@@ -500,16 +544,6 @@ class FtcGuiApplication(TouchApplication):
                     os.remove(filename)
             
     def clearListClicked(self):
-        """t=TouchMessageBox("Clear", self.win)
-        t.setCancelButton()
-        t.setText("Do you really\nwant to delete\nthe program list?")
-        t.setBtnTextSize(2)
-        t.setPosButton("Yes")
-        t.setNegButton("No")
-        (r,s)=t.exec_()
-        
-        if s == "Yes": self.posList.clear()
-        """
         self.posList.clear()
         
 def clean(text,maxlen):
