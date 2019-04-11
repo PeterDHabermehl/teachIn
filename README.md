@@ -11,3 +11,5 @@ Also the list can be stored and re-loaded into the app.
 
 To do:
 - limitation of the axes according to the pyhsical range of the robot
+- some photos and a video for documentational purposes
+- provision of the enhanced ftduino_direct source code
