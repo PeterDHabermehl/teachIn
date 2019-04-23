@@ -10,23 +10,18 @@ from TouchStyle import *
 from TouchAuxiliary import *
 from PyQt4 import QtCore, QtGui
 
-DEVEL = True
-FTD_VER = "1.3.3_enhanced"
+DEVEL = False
+FTD_VER = "1.3.3_en14"
 
 HOSTDIR = os.path.dirname(os.path.realpath(__file__))
 PROGDIR= os.path.join(HOSTDIR , "proglists")
 
 if not os.path.exists(PROGDIR):
     os.mkdir(PROGDIR)
-    
 
-UAPOS = [    0,  700, 1350, 1700, 2000, 2300, 2700, 3100, 3500]
-LUPOS = [ 3050, 3500, 3500, 3500, 3500, 3500, 3500, 3500, 3500]
-LLPOS = [    0,    0,    0,  600,  900, 1100, 1300, 1500, 1600]
-
-LAPOS = [    0,  400,  800, 1500, 1700, 3500]
-UUPOS = [ 1100, 1450, 1750, 2850, 3500, 3500]
-ULPOS = [    0,    0,    0,    0,    0,  700]
+LAPOS = [    0,  900, 1000, 1200, 1325, 1450, 1500, 2600, 2800, 3050, 3200, 3350, 3425, 3500, 3650, 3700, 3800 ]
+UUPOS = [ 1100, 1150, 2250, 2850, 3200, 3700, 3730, 3730, 3730, 3730, 3730, 3730, 3730, 3730, 3730, 3730, 3730 ]
+ULPOS = [    0,    0,    0,    0,    0,    0,    0,    0,  800, 1200, 1600, 2000, 2400, 2800, 3200, 3600, 3650 ]
 
 class QDblPushButton(QPushButton):
     doubleClicked = pyqtSignal()
@@ -113,7 +108,7 @@ class FtcGuiApplication(TouchApplication):
             self.dial = QSlider(Qt.Horizontal)
             
         self.dial.setMinimum(0)
-        self.dial.setMaximum(3500)
+        self.dial.setMaximum(6500)
         self.dial.setValue(0)
         self.dial.sliderReleased.connect(self.dialed)
         self.dial.valueChanged.connect(self.dialing)
@@ -254,30 +249,28 @@ class FtcGuiApplication(TouchApplication):
         
         #
         tab03.setLayout(vbox)
-        self.tabs.addTab(tab03,"Oper")
-        
+        self.tabs.addTab(tab03,"Run")
     
         #
         #
         #
+        
         self.win.setCentralWidget(self.tabs)
-        
-        #
-        # 
-        #
-        
-        self.myftd=ftd.ftduino()
-        
-        if ((self.myftd.getDevice() == None) or (self.myftd.comm("ftduino_direct_get_version") != FTD_VER)) and not DEVEL:
-            self.ftDuino_not_found()
-            return
-        
-        self.myftd.ftduino.timeout=None
+    
         
         #
         #
         #
         self.win.show()
+        
+        self.myftd=ftd.ftduino()
+        
+        if ((self.myftd.getDevice() == None) or (self.myftd.comm("ftduino_direct_get_version") != FTD_VER)) and not DEVEL:
+            self.ftDuino_not_found()
+            exit()
+        
+        self.myftd.ftduino.timeout=None
+        
         self.exec_()
 
     def axesClick(self):
@@ -297,7 +290,7 @@ class FtcGuiApplication(TouchApplication):
             self.dial.setRange(int(np.interp(self.a3pos, LAPOS, ULPOS)), int(np.interp(self.a3pos, LAPOS, UUPOS)))
             self.dial.setValue(self.a2pos)
         elif self.a3.isChecked(): 
-            self.dial.setRange(int(np.interp(self.a2pos, UAPOS, LLPOS)), int(np.interp(self.a2pos, UAPOS, LUPOS)))
+            self.dial.setRange(int(np.interp(self.a2pos, UUPOS, LAPOS)), int(np.interp(self.a2pos, ULPOS, LAPOS)))
             self.dial.setValue(self.a3pos)
         elif self.a4.isChecked():
             self.dial.setRange(0, 100)
